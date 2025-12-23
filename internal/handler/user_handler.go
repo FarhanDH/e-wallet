@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"ewallet/internal/entity"
 	"ewallet/internal/repository"
 	"net/http"
 	"strconv"
@@ -79,4 +80,25 @@ func (h *UserHandler) Transfer(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Transfer success"})
+}
+
+func (h *UserHandler) GetHistory(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr) // Convert string to int
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	history, err := h.repo.GetTransactionHistory(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if history == nil {
+		history = []entity.Transaction{}
+	}
+
+	c.JSON(http.StatusOK, history)
 }

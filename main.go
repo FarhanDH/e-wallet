@@ -26,6 +26,7 @@ func main() {
 	r.POST("/users", userHandler.CreateUser)
 	r.GET("/users/:id", userHandler.GetUser)
 	r.POST("/transfer", userHandler.Transfer)
+	r.GET("/users/:id/transactions", userHandler.GetHistory)
 
 	fmt.Println("Server running on port 8080")
 	r.Run(":8080")

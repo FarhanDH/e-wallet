@@ -89,7 +89,7 @@ Separating business logic from database queries allows for easier testing and ma
 - [x] Database Connection (Postgres)
 - [x] CRUD User (Raw SQL)
 - [x] Atomic Transfer (Transaction)
-- [ ] REST API Implementation (using Gin/Chi)
+- [x] REST API Implementation (using Gin)
 - [ ] Unit Testing with Mocking
 - [ ] Dockerization
 

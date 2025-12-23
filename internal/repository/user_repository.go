@@ -48,14 +48,12 @@ func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
 		return err
 	}
 
-	// Reduce the balance of sender
-	queryDebit := "UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1"
-	res, err := tx.Exec(queryDebit, amount, fromID)
+	// Debit Sender
+	res, err := tx.Exec("UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1", amount, fromID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-
 	// Rollback when there's no rows affected, in this case, the balance is not enough or the user is not found
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -63,10 +61,8 @@ func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
 		return fmt.Errorf("insufficient funds or sender not found")
 	}
 
-	// Add the balance of receiver
-	queryCredit := "UPDATE users SET balance = balance + $1 WHERE id = $2"
-	res, err = tx.Exec(queryCredit, amount, toID)
-
+	// Credit receiver
+	res, err = tx.Exec("UPDATE users SET balance = balance + $1 WHERE id = $2", amount, toID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -78,9 +74,41 @@ func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
 		return fmt.Errorf("receiver with ID %d not found", toID)
 	}
 
+	// Record history
+	_, err = tx.Exec("INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type) VALUES ($1, $2, $3, 'TRANSFER')", fromID, toID, amount)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (r *UserRepository) GetTransactionHistory(userID int) ([]entity.Transaction, error) {
+	query := `SELECT id, from_account_id, to_account_id, amount, transaction_type, created_at 
+	FROM transactions
+	WHERE from_account_id = $1 OR to_account_id = $1
+	ORDER BY created_at DESC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []entity.Transaction
+
+	for rows.Next() {
+		var t entity.Transaction
+		err := rows.Scan(&t.ID, &t.FromAccountID, &t.ToAccountID, &t.Amount, &t.TransactionType, &t.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, t)
+	}
+	return history, nil
 }
