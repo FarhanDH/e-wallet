@@ -2,8 +2,11 @@ package main
 
 import (
 	"ewallet/config"
+	"ewallet/internal/handler"
 	"ewallet/internal/repository"
 	"fmt"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -12,21 +15,19 @@ func main() {
 		panic(err)
 	}
 	defer db.Close()
-	repo := repository.NewUserRepository(db)
-	user, err := repo.GetUser(1)
-	fmt.Println(user)
-	user, err = repo.GetUser(2)
-	fmt.Println(user)
-	err = repo.Transfer(1, 2, 5000)
-	if err != nil {
-		fmt.Println("Transfer Failed", err)
-		panic(err)
-	} else {
-		fmt.Println("Transfer Success")
-	}
-	user, err = repo.GetUser(1)
-	fmt.Println(user)
-	user, err = repo.GetUser(2)
-	fmt.Println(user)
 
+	userRepo := repository.NewUserRepository(db)
+	userHandler := handler.NewUserHandler(userRepo)
+
+	// setup router
+	r := gin.Default()
+
+	// Define Routes
+	r.POST("/users", userHandler.CreateUser)
+	r.GET("/users/:id", userHandler.GetUser)
+	r.POST("/transfer", userHandler.Transfer)
+	r.GET("/users/:id/transactions", userHandler.GetHistory)
+
+	fmt.Println("Server running on port 8080")
+	r.Run(":8080")
 }
