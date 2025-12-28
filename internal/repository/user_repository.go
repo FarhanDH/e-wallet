@@ -1,17 +1,28 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"ewallet/internal/entity"
 	"fmt"
 )
 
+type UserRepositoryInterface interface {
+	CreateUser(name string, balance int) error
+	GetUser(id int) (entity.User, error)
+	Transfer(ctx context.Context, fromID, toID, amount int) error
+	GetTransactionHistory(userID int) ([]entity.Transaction, error)
+}
+
+// Ensure UserRepository struct follows this contract
+var _UserRepositoryInterface = &UserRepository{}
+
 type UserRepository struct {
 	db *sql.DB
 }
 
-func NewUserRepository(db *sql.DB) UserRepository {
-	return UserRepository{
+func NewUserRepository(db *sql.DB) *UserRepository {
+	return &UserRepository{
 		db: db,
 	}
 }
@@ -41,15 +52,18 @@ func (r *UserRepository) GetUser(id int) (entity.User, error) {
 	return user, err
 }
 
-func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
+func (r *UserRepository) Transfer(ctx context.Context, fromID int, toID int, amount int) error {
 	// Begin Transaction
-	tx, err := r.db.Begin()
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
+	// If panic/error occurred, rollback automatically
+	defer tx.Rollback()
+
 	// Debit Sender
-	res, err := tx.Exec("UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1", amount, fromID)
+	res, err := tx.ExecContext(ctx, "UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1", amount, fromID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -62,7 +76,7 @@ func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
 	}
 
 	// Credit receiver
-	res, err = tx.Exec("UPDATE users SET balance = balance + $1 WHERE id = $2", amount, toID)
+	res, err = tx.ExecContext(ctx, "UPDATE users SET balance = balance + $1 WHERE id = $2", amount, toID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -75,7 +89,7 @@ func (r *UserRepository) Transfer(fromID int, toID int, amount int) error {
 	}
 
 	// Record history
-	_, err = tx.Exec("INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type) VALUES ($1, $2, $3, 'TRANSFER')", fromID, toID, amount)
+	_, err = tx.ExecContext(ctx, "INSERT INTO transactions (from_account_id, to_account_id, amount, transaction_type) VALUES ($1, $2, $3, 'TRANSFER')", fromID, toID, amount)
 	if err != nil {
 		tx.Rollback()
 		return err

@@ -1,20 +1,22 @@
 package handler
 
 import (
+	"context"
 	"ewallet/internal/entity"
 	"ewallet/internal/repository"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
-	repo repository.UserRepository
+	repo repository.UserRepositoryInterface
 }
 
 // Constructor
-func NewUserHandler(repo repository.UserRepository) UserHandler {
+func NewUserHandler(repo repository.UserRepositoryInterface) UserHandler {
 	return UserHandler{repo: repo}
 }
 
@@ -73,8 +75,17 @@ func (h *UserHandler) Transfer(c *gin.Context) {
 		return
 	}
 
-	err = h.repo.Transfer(req.FromID, req.ToID, req.Amount)
+	// Create new context that has 2 seconds timeout.
+	// The parent is c.Request.Context() context from Gin
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+	defer cancel()
+
+	err = h.repo.Transfer(ctx, req.FromID, req.ToID, req.Amount)
 	if err != nil {
+		if err == context.DeadlineExceeded {
+			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "Transaction timeout, please try again."})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
